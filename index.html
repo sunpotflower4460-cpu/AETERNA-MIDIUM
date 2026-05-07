@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AETERNA Phase 9.4 - The Reality Guide (Polished)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0; overflow: hidden;
+            background-color: #010205; color: #ffffff;
+            font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+            touch-action: none;
+        }
+        #canvas-container {
+            position: absolute; top: 0; left: 0;
+            width: 100vw; height: 100vh; z-index: 1;
+        }
+
+        /* ── Intro Guide ── */
+        #intro-guide {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(12px);
+            padding: 24px; border-radius: 16px; border: 2px solid rgba(34,211,238,0.4);
+            text-align: center; font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+            font-size: 14px; z-index: 100;
+            color: rgba(255,255,255,0.95); pointer-events: none;
+            transition: opacity 2s ease-out;
+            max-width: 90vw; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        @media (max-width: 768px) {
+            #intro-guide {
+                padding: 20px 16px; font-size: 13px;
+                max-width: 85vw;
+            }
+        }
+
+        /* ── System State Badge ── */
+        #system-state-badge {
+            display: inline-block; padding: 4px 10px; border-radius: 6px;
+            font-size: 10px; font-weight: bold; font-family: 'Hiragino Sans', sans-serif;
+            margin-left: 10px; vertical-align: middle;
+            border: 1.5px solid currentColor; letter-spacing: 0.05em;
+            transition: all 0.3s ease;
+        }
+        @media (max-width: 768px) {
+            #system-state-badge {
+                display: block; margin: 4px 0 0 0; padding: 6px 12px;
+                font-size: 11px; text-align: center;
+                border-radius: 8px;
+            }
+        }
+
+        /* ── Tooltips ── */
+        .has-tooltip { position: relative; cursor: help; border-bottom: 1px dotted rgba(255,255,255,0.3); }
+        .has-tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute; bottom: 100%; left: 0; transform: translateY(-4px);
+            background: rgba(0,0,0,0.9); border: 1px solid rgba(34,211,238,0.4);
+            color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 8px;
+            white-space: nowrap; z-index: 50; pointer-events: none; font-family: sans-serif;
+        }
+
+        /* ── スライダー基本スタイル ── */
+        input[type=range] { -webkit-appearance: none; background: transparent; width: 100%; height: 28px; cursor: pointer; margin: 0; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #fff; cursor: pointer; box-shadow: 0 0 10px rgba(255,255,255,0.8); transition: transform 0.1s; margin-top: -8px; }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 3px; background: linear-gradient(to right, rgba(34,211,238,0.8) var(--pct, 0%), rgba(255,255,255,0.1) var(--pct, 0%)); border-radius: 2px; }
+
+        /* ── カスタムスクロールバー ── */
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(34,211,238,0.4); border-radius: 2px; }
+
+        /* ── アコーディオン ── */
+        .accordion-grid { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 0.25s ease-out, opacity 0.25s ease-out; }
+        .accordion-grid.collapsed { grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+        .accordion-inner { overflow: hidden; }
+
+        /* ── メトリクスパネル ── */
+        #metrics-panel {
+            width: min(55vw, 256px);
+            max-height: calc(100vh - 280px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(34,211,238,0.3) transparent;
+            pointer-events: auto;
+        }
+        @media (max-width: 768px) {
+            #metrics-panel {
+                width: min(90vw, 320px);
+                max-width: calc(100vw - 24px);
+                font-size: 10px !important;
+                max-height: calc(50vh - 100px);
+            }
+            #metrics-panel .text-\\[8\\.5px\\] {
+                font-size: 10px !important;
+            }
+            #metrics-panel .flex {
+                margin-bottom: 4px;
+            }
+        }
+
+        /* ── σバーグラフ (パフォーマンス最適化版) ── */
+        #sigma-bar-track { width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin-top: 4px; overflow: hidden; position: relative; }
+        #sigma-bar-fill {
+            height: 100%; width: 100%; /* 初期幅を100%に */
+            background: #22d3ee;
+            border-radius: 2px;
+            transform-origin: left; /* 左端を基準に拡大縮小 */
+            transition: transform 0.1s, background-color 0.3s;
+        }
+        #sigma-bar-track::after { content: ''; position: absolute; top: 0; left: 50%; width: 1px; height: 100%; background: rgba(255,255,255,0.5); transform: translateX(-50%); }
+        .sigma-label-row { display: flex; justify-content: space-between; font-size: 7px; color: rgba(255,255,255,0.3); margin-top: 2px; }
+
+        /* ── プリセットボタン ── */
+        .preset-btn {
+            font-size: 11px; font-family: 'Hiragino Sans', sans-serif;
+            padding: 10px 8px; border-radius: 8px;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.7);
+            cursor: pointer; transition: all 0.2s ease;
+            white-space: nowrap; flex: 1; min-height: 42px;
+            font-weight: 500;
+        }
+        .preset-btn:active { transform: scale(0.96); }
+        .preset-btn.active {
+            background: rgba(34,211,238,0.2);
+            border-color: rgba(34,211,238,0.6);
+            color: #22d3ee;
+            box-shadow: 0 0 12px rgba(34,211,238,0.3);
+            font-weight: bold;
+        }
+        @media (max-width: 768px) {
+            .preset-btn {
+                font-size: 12px; padding: 12px 10px;
+                min-height: 48px;
+            }
+        }
+
+        /* ── アクションボタン ── */
+        .action-btn {
+            min-height: 44px; display: flex; align-items: center;
+            justify-content: center; font-size: 11px;
+            font-weight: 500;
+        }
+        @media (max-width: 768px) {
+            .action-btn {
+                min-height: 48px; font-size: 12px;
+            }
+        }
+
+        /* ── Touch feedback indicator ── */
+        #touch-feedback {
+            position: fixed;
+            width: 80px;
+            height: 80px;
+            border: 3px solid rgba(34,211,238,0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.5);
+            transition: opacity 0.3s, transform 0.3s;
+            box-shadow: 0 0 20px rgba(34,211,238,0.6);
+        }
+        #touch-feedback.active {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        /* ── Mobile-specific improvements ── */
+        @media (max-width: 768px) {
+            .text-\\[10px\\] { font-size: 12px !important; }
+            .text-\\[9px\\] { font-size: 11px !important; }
+            .text-\\[8px\\] { font-size: 10px !important; }
+        }
+
+        /* ── Mobile Help Overlay ── */
+        #mobile-help-btn {
+            position: fixed;
+            bottom: max(80px, calc(80px + env(safe-area-inset-bottom)));
+            right: max(16px, env(safe-area-inset-right));
+            width: 48px;
+            height: 48px;
+            background: rgba(34,211,238,0.2);
+            border: 2px solid rgba(34,211,238,0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #22d3ee;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 50;
+            pointer-events: auto;
+            box-shadow: 0 4px 20px rgba(34,211,238,0.3);
+            transition: all 0.3s;
+        }
+        #mobile-help-btn:active { transform: scale(0.9); }
+        @media (min-width: 769px) {
+            #mobile-help-btn { display: none; }
+        }
+
+        #mobile-help-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(12px);
+            z-index: 200;
+            display: none;
+            overflow-y: auto;
+            pointer-events: auto;
+        }
+        #mobile-help-overlay.visible {
+            display: flex;
+        }
+
+        /* ── Glassmorphism 共通 ── */
+        .glass-panel { background: rgba(5, 10, 15, 0.4); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+
+        /* ── Japanese Observation Display ── */
+        #observation-display {
+            position: fixed;
+            bottom: max(16px, env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(90vw, 400px);
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(34,211,238,0.4);
+            border-radius: 12px;
+            color: rgba(255,255,255,0.95);
+            font-size: 13px;
+            line-height: 1.6;
+            text-align: center;
+            font-family: 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+            z-index: 40;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease-out;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+        #observation-display.visible {
+            opacity: 1;
+        }
+        #observation-display.touch-feedback {
+            border-color: rgba(34,211,238,0.8);
+            background: rgba(34,211,238,0.15);
+        }
+        #observation-display.state-change {
+            border-color: rgba(251,191,36,0.8);
+            background: rgba(251,191,36,0.15);
+        }
+        #observation-display.critical {
+            border-color: rgba(239,68,68,0.8);
+            background: rgba(239,68,68,0.15);
+        }
+        @media (max-width: 768px) {
+            #observation-display {
+                font-size: 12px;
+                padding: 10px 14px;
+                /* Position above mobile help button and control panel */
+                bottom: auto;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: min(85vw, 350px);
+            }
+        }
+        @media (min-width: 769px) {
+            #observation-display {
+                /* Desktop: position at bottom center */
+                bottom: max(24px, env(safe-area-inset-bottom));
+            }
+        }
+
+        /* ── セーフエリア対応 ── */
+        .pt-safe { padding-top: max(12px, env(safe-area-inset-top, 12px)); }
+        .pl-safe { padding-left: max(12px, env(safe-area-inset-left, 12px)); }
+        .pr-safe { padding-right: max(12px, env(safe-area-inset-right, 12px)); }
+        .pb-safe { padding-bottom: max(12px, env(safe-area-inset-bottom, 12px)); }
+
+        /* ── Phase 9: Guide Panel & Visuals ── */
+        #guide-panel { position: absolute; right: max(12px, env(safe-area-inset-right, 12px)); top: 50%; transform: translateY(-50%); width: 280px; pointer-events: auto; background: rgba(0, 0, 0, 0.85); z-index: 20; display: none; }
+        @media (min-width: 768px) { #guide-panel { display: flex; } }
+        #yin-yang-canvas { position: absolute; left: max(12px, env(safe-area-inset-left, 12px)); bottom: max(12px, env(safe-area-inset-bottom, 12px)); width: 120px; height: 60px; pointer-events: none; z-index: 10; display: none; }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .visual-btn.active { background: rgba(34, 211, 238, 0.2); border-color: rgba(34, 211, 238, 0.5); color: #22d3ee; }
+
+        /* ── Signal Runtime Panel ── */
+        #signal-observe-panel { display: none; }
+        #signal-observe-panel.visible { display: block; }
+        .signal-section { border-top: 1px solid rgba(34,211,238,0.15); margin-top: 6px; padding-top: 6px; }
+        .signal-section-title { font-size: 8px; color: rgba(34,211,238,0.7); font-weight: bold; letter-spacing: 0.1em; margin-bottom: 3px; }
+        .signal-row { display: flex; justify-content: space-between; font-size: 8px; color: rgba(255,255,255,0.6); margin-bottom: 1px; }
+        .signal-row-val { color: rgba(255,255,255,0.9); max-width: 60%; text-align: right; word-break: break-all; }
+        .signal-kind-dominant { color: #22d3ee; }
+        .signal-kind-coactive { color: #a78bfa; }
+        .signal-kind-background { color: rgba(255,255,255,0.4); }
+        .signal-kind-suppressed { color: rgba(239,68,68,0.6); }
+        .signal-utterance { font-size: 10px; color: #fff; line-height: 1.5; margin-top: 4px; padding: 6px; background: rgba(34,211,238,0.06); border-radius: 4px; border-left: 2px solid rgba(34,211,238,0.4); }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="touch-feedback"></div>
+
+    <!-- Japanese Observation Display -->
+    <div id="observation-display">システムを観測中...</div>
+
+    <!-- Mobile Help Button -->
+    <div id="mobile-help-btn" onclick="toggleMobileHelp()">?</div>
+
+    <!-- Mobile Help Overlay -->
+    <div id="mobile-help-overlay">
+        <div style="padding: 24px; max-width: 600px; margin: auto; color: white;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="font-size: 24px; color: #22d3ee; font-weight: bold;">📱 使い方ガイド</h2>
+                <button onclick="toggleMobileHelp()" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 16px; color: white; font-size: 14px;">閉じる</button>
+            </div>
+
+            <div style="background: rgba(34,211,238,0.1); border-left: 3px solid #22d3ee; padding: 16px; margin-bottom: 20px; border-radius: 4px;">
+                <h3 style="font-size: 16px; color: #22d3ee; margin-bottom: 8px; font-weight: bold;">🧠 AETERNAとは？</h3>
+                <p style="font-size: 13px; line-height: 1.7; color: rgba(255,255,255,0.85);">
+                    生命のように活動し続ける原始的な神経ネットワークのシミュレーション。画面上の光の粒子はニューロン（神経細胞）を表しています。
+                </p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 16px; color: #22d3ee; margin-bottom: 12px; font-weight: bold;">💡 基本操作</h3>
+                <div style="space-y: 12px;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-size: 14px; font-weight: bold; color: white; margin-bottom: 6px;">👆 タップ</div>
+                        <div style="font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.6;">
+                            画面をタップすると、その場所に「刺激」が伝わります。ニューロンが活性化し、ネットワーク全体に波が広がります。
+                        </div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-size: 14px; font-weight: bold; color: white; margin-bottom: 6px;">🤏 ピンチ</div>
+                        <div style="font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.6;">
+                            2本指でピンチイン/アウトすると、カメラのズームを調整できます。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 16px; color: #22d3ee; margin-bottom: 12px; font-weight: bold;">🎛️ プリセット</h3>
+                <div style="space-y: 12px;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-size: 14px; font-weight: bold; color: white; margin-bottom: 6px;">🌍 シュマン</div>
+                        <div style="font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.6;">
+                            地球の共鳴周波数（シューマン共鳴）に基づいた設定。安定した活動パターンが観察できます。<strong style="color: #22d3ee;">初めての方におすすめ</strong>
+                        </div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-size: 14px; font-weight: bold; color: white; margin-bottom: 6px;">φ 黄金比</div>
+                        <div style="font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.6;">
+                            黄金比に基づいた幾何学的な設定。複雑で美しいパターンが生まれます。
+                        </div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="font-size: 14px; font-weight: bold; color: white; margin-bottom: 6px;">⚡ ガンマ</div>
+                        <div style="font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.6;">
+                            高周波のガンマ波設定。活発で動的な活動が観察できます。
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 16px; color: #22d3ee; margin-bottom: 12px; font-weight: bold;">📊 状態表示</h3>
+                <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; line-height: 1.7; font-size: 13px; color: rgba(255,255,255,0.7);">
+                    画面上部のバッジがシステムの状態を示します：<br>
+                    <span style="color: white; font-weight: bold;">QUIET</span> = 静止状態<br>
+                    <span style="color: #22d3ee; font-weight: bold;">ACTIVE</span> = 活動中<br>
+                    <span style="color: #fbbf24; font-weight: bold;">CRITICAL</span> = 臨界状態（バランスの取れた活動）
+                </div>
+            </div>
+
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 20px; margin-top: 20px;">
+                <p style="font-size: 12px; color: rgba(255,255,255,0.5); text-align: center; line-height: 1.6;">
+                    このシステムは計算神経科学の原理に基づいて<br>自律的に活動し続けます。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="intro-guide">
+        <div style="font-size: 20px; margin-bottom: 12px; color: #22d3ee;">🧠</div>
+        <p style="font-size: 18px; font-weight: bold; color: #22d3ee; margin-bottom: 16px; letter-spacing: 0.1em;">AETERNA</p>
+        <p style="font-size: 13px; line-height: 1.6; margin-bottom: 14px; color: rgba(255,255,255,0.9);">
+            生命のように活動し続ける<br>原始的な神経ネットワーク
+        </p>
+        <div style="background: rgba(34,211,238,0.1); border-left: 3px solid #22d3ee; padding: 12px; margin: 12px 0; text-align: left;">
+            <div style="font-size: 12px; font-weight: bold; color: #22d3ee; margin-bottom: 8px;">💡 使い方</div>
+            <div style="font-size: 12px; line-height: 1.8; color: rgba(255,255,255,0.85);">
+                ▸ 画面をタップすると刺激が伝わります<br>
+                ▸ 下部のパネルで動作を調整できます<br>
+                ▸ 「シュマン」を試してみてください<br>
+                ▸ 2本指でズームイン/アウト
+            </div>
+        </div>
+        <p style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 12px;">
+            タップして始めましょう
+        </p>
+    </div>
+
+    <canvas id="yin-yang-canvas" width="240" height="120"></canvas>
+
+    <!-- ── Guide / Observe Panel ── -->
+    <div id="guide-panel" class="glass-panel p-4 rounded-xl font-mono text-[9px] text-white/80 shadow-2xl flex-col gap-3">
+        <div class="text-cyan-400 font-bold border-b border-white/10 pb-1.5 flex justify-between items-center">
+            <span class="tracking-widest">REALITY GUIDE</span>
+            <span id="guide-provider" class="text-[7px] text-white/50 bg-white/5 px-1.5 py-0.5 rounded">PROVIDER: NONE</span>
+        </div>
+        <div id="guide-latest" class="text-[11px] text-white font-bold leading-relaxed min-h-[48px] text-cyan-50">
+            Observer is online. Reading whole-vs-parts integration proxy...
+        </div>
+        <ul id="guide-history" class="space-y-1.5 text-[8px] text-white/40 list-none"></ul>
+
+        <!-- Phase 6: Long-horizon trend sparklines -->
+        <div class="border-t border-white/10 pt-2 mt-2">
+            <div class="text-[7px] text-white/50 mb-1 tracking-wider">RECENT TRENDS (100 frames)</div>
+            <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                    <span class="text-[7px] text-white/60 w-12">σ</span>
+                    <canvas id="sparkline-sigma" class="opacity-80"></canvas>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[7px] text-white/60 w-12">Φ*</span>
+                    <canvas id="sparkline-phi" class="opacity-80"></canvas>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[7px] text-white/60 w-12">energy</span>
+                    <canvas id="sparkline-energy" class="opacity-80"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signal Observe Panel (shown when signal_runtime mode is active) -->
+        <div id="signal-observe-panel" class="mt-2 max-h-60 overflow-y-auto custom-scrollbar">
+            <div class="text-cyan-400 font-bold text-[8px] tracking-widest mb-2">SIGNAL RUNTIME</div>
+
+            <div class="signal-section">
+                <div class="signal-section-title">STIMULUS</div>
+                <div class="signal-row"><span>salience</span><span id="obs-salience" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>novelty</span><span id="obs-novelty" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>emotionalCharge</span><span id="obs-emotional" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>explicitQuestion</span><span id="obs-question" class="signal-row-val">—</span></div>
+            </div>
+
+            <div class="signal-section">
+                <div class="signal-section-title">SIGNALS</div>
+                <div id="obs-signals" class="space-y-0.5"></div>
+            </div>
+
+            <div class="signal-section">
+                <div class="signal-section-title">BOUNDARY</div>
+                <div class="signal-row"><span>permeability</span><span id="obs-permeability" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>selfOuterSep</span><span id="obs-separation" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>shockAbsorption</span><span id="obs-shock" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>externalPressure</span><span id="obs-pressure" class="signal-row-val">—</span></div>
+            </div>
+
+            <div class="signal-section">
+                <div class="signal-section-title">FIELD</div>
+                <div class="signal-row"><span>closeness</span><span id="obs-closeness" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>fragility</span><span id="obs-fragility" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>urgency</span><span id="obs-urgency" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>answerPressure</span><span id="obs-answer-pressure" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>unfinishedness</span><span id="obs-unfinished" class="signal-row-val">—</span></div>
+            </div>
+
+            <div class="signal-section">
+                <div class="signal-section-title">PROTO MEANINGS</div>
+                <div id="obs-proto-meanings" class="text-[8px] text-white/70 space-y-0.5"></div>
+            </div>
+
+            <div class="signal-section">
+                <div class="signal-section-title">DECISION</div>
+                <div class="signal-row"><span>stance</span><span id="obs-stance" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>replyIntent</span><span id="obs-intent" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>shouldAnswer</span><span id="obs-should-answer" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>shouldStayOpen</span><span id="obs-stay-open" class="signal-row-val">—</span></div>
+            </div>
+
+            <div class="signal-section">
+                <div class="signal-section-title">SENTENCE PLAN</div>
+                <div class="signal-row"><span>reaction</span><span id="obs-reaction" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>core</span><span id="obs-core" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>answer</span><span id="obs-answer" class="signal-row-val">—</span></div>
+                <div class="signal-row"><span>nextStep</span><span id="obs-next-step" class="signal-row-val">—</span></div>
+            </div>
+
+            <div class="signal-section">
+                <div class="signal-section-title">UTTERANCE</div>
+                <div id="obs-utterance" class="signal-utterance">—</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-layer" class="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between overflow-hidden">
+        <div class="flex justify-between items-start w-full pt-safe pl-safe pr-safe pointer-events-none">
+            <div class="pointer-events-auto flex items-center">
+                <div>
+                    <h1 class="text-lg sm:text-xl font-bold tracking-[0.3em] text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.5)] leading-tight">AETERNA</h1>
+                    <h2 class="text-[8px] font-mono mt-0.5 text-cyan-400 tracking-[0.2em] opacity-80">PHASE 9.4 : POLISHED</h2>
+                </div>
+                <span id="system-state-badge" class="text-white/50 border-white/50">QUIET</span>
+                <!-- Phase 6: Major process indicator -->
+                <div id="major-process-indicator" class="ml-3 px-2 py-1 rounded text-[8px] font-mono border border-white/20 bg-white/5" style="display: none;">
+                    <span id="major-process-label" class="font-bold">—</span>
+                </div>
+            </div>
+
+            <div id="metrics-panel" class="glass-panel p-1 rounded-xl font-mono text-[8.5px] text-white/70 shadow-2xl custom-scrollbar mt-1">
+              <div class="p-2 pb-1">
+                  <!-- 物理層 -->
+                  <div class="mb-2">
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-physical', 'icon-physical')">
+                          <span class="tracking-wider">PHYSICAL DISK</span>
+                          <svg id="icon-physical" class="w-3 h-3 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-physical" class="accordion-grid">
+                          <div class="accordion-inner space-y-0.5 pt-0.5">
+                              <div class="flex justify-between has-tooltip" data-tooltip="[EXACT] Toroidal frequency — direct slider input value. Control parameter, not derived." id="row-omega-t"><span>ω_t (toroidal Hz)</span><span id="val-omega-t" class="text-white">0.00</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[EXACT] Poloidal frequency — direct slider input value. Control parameter, not derived." id="row-omega-p"><span>ω_p (poloidal Hz)</span><span id="val-omega-p" class="text-white">0.00</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] R/r ratio — geometrically computed from R (fixed = φ) and r (slider). Compared to φ = 1.618." id="row-ratio"><span>R/r</span><span id="val-ratio" class="text-white">0.000</span></div>
+                              <div class="flex justify-between" id="row-phase-ratio"><span>ω_p/ω_t</span><span id="val-phase-ratio" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="軌道がトーラス表面を稠密に埋め尽くす性質" id="row-ergodic"><span>Ergodic</span><span id="val-ergodic" class="text-white">NO</span></div>
+                              <div class="flex justify-between" id="row-schumann"><span>Schumann lock</span><span id="val-schumann" class="text-white">NO</span></div>
+                          </div>
+                      </div>
+                  </div>
+                  <!-- 幾何層 -->
+                  <div class="mb-2">
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-geometry', 'icon-geometry')">
+                          <span class="tracking-wider">TORUS GEOMETRY</span>
+                          <svg id="icon-geometry" class="w-3 h-3 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-geometry" class="accordion-grid">
+                          <div class="accordion-inner space-y-0.5 pt-0.5">
+                              <div class="flex justify-between" id="row-torus-formed"><span>Torus formed</span><span id="val-torus-formed" class="text-white">NO</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="周波数比の無理数近似度（無理数ほど複雑な軌道）" id="row-irrational"><span>Irrationality</span><span id="val-irrational" class="text-white">0.000</span></div>
+                          </div>
+                      </div>
+                  </div>
+                  <!-- ネットワーク層 -->
+                  <div class="mb-2">
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-network', 'icon-network')">
+                          <span class="tracking-wider">NETWORK STATE</span>
+                          <svg id="icon-network" class="w-3 h-3 transform transition-transform collapsed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-network" class="accordion-grid collapsed">
+                          <div class="accordion-inner space-y-0.5 pt-0.5">
+                              <div class="flex justify-between has-tooltip" data-tooltip="[EXACT] Fraction of nodes crossing the spike threshold this frame. Raw node count / total nodes." id="row-firing"><span>Firing rate</span><span id="val-firing" class="text-white">0.0%</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] Largest connected component of active nodes (spikeTrace > 0.5) as a fraction of total. Computed via Union-Find." id="row-cluster"><span>Largest cluster</span><span id="val-cluster" class="text-white">0.0%</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[PROXY] Whole-vs-parts integration proxy. Custom approximation using subgroup mean activity differences. NOT IIT Φ." id="row-phi"><span>Φ* proxy</span><span id="val-phi" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[PROXY] Kuramoto-like order parameter approximation. Uses weighted node phases; not full oscillator coupling." id="row-coherence"><span>Phase coherence</span><span id="val-coherence" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[SPECULATIVE] Not implemented — placeholder. Attractor library matching is not yet built. Always shows NONE." id="row-attractor-id"><span>Attractor ID</span><span id="val-attractor-id" class="text-white">NONE</span></div>
+                              <div class="flex justify-between" id="row-attractor-sim"><span>Attractor sim</span><span id="val-attractor-sim" class="text-white">0.000</span></div>
+                              <div class="flex justify-between" id="row-arousal"><span>Arousal</span><span id="val-arousal" class="text-white">0.000</span></div>
+                          </div>
+                      </div>
+                  </div>
+                  <!-- 階層層 (Phase E1) -->
+                  <div class="mb-2">
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-hierarchy', 'icon-hierarchy')">
+                          <span class="tracking-wider">HIERARCHY (E1)</span>
+                          <svg id="icon-hierarchy" class="w-3 h-3 transform transition-transform collapsed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-hierarchy" class="accordion-grid collapsed">
+                          <div class="accordion-inner space-y-0.5 pt-0.5">
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Number of sub-tori in lower layer"><span>Sub-tori count</span><span id="val-subtori-count" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Size of each sub-torus (segments × segments)"><span>Sub-torus size</span><span id="val-subtorus-size" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Size of upper torus (segments × segments)"><span>Upper torus size</span><span id="val-upper-size" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Mean activity across all sub-tori"><span>Sub mean activity</span><span id="val-sub-mean-activity" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Mean arousal across all sub-tori"><span>Sub mean arousal</span><span id="val-sub-mean-arousal" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Mean sigma across all sub-tori"><span>Sub mean sigma</span><span id="val-sub-mean-sigma" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Mean phi proxy across all sub-tori"><span>Sub mean phi</span><span id="val-sub-mean-phi" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Mean activity in upper torus"><span>Upper mean activity</span><span id="val-upper-mean-activity" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Arousal in upper torus"><span>Upper arousal</span><span id="val-upper-arousal" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Sigma in upper torus"><span>Upper sigma</span><span id="val-upper-sigma" class="text-white">—</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[E1] Phi proxy in upper torus"><span>Upper phi</span><span id="val-upper-phi" class="text-white">—</span></div>
+                          </div>
+                      </div>
+                  </div>
+                  <!-- 天然メカニズム層 -->
+                  <div class="mb-2">
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-nature', 'icon-nature')">
+                          <span class="tracking-wider">NATURAL MECHANISMS</span>
+                          <svg id="icon-nature" class="w-3 h-3 transform transition-transform collapsed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-nature" class="accordion-grid collapsed">
+                          <div class="accordion-inner space-y-0.5 pt-0.5 pb-1">
+                              <div class="flex justify-between transition-colors duration-300 has-tooltip" data-tooltip="[DERIVED] Smoothed branching ratio: EMA of (currGenFiring / prevGenFiring). Near 1 suggests critical-like propagation. Not a direct measurement of criticality." id="row-branching"><span>σ cascade</span><span id="val-branching" class="text-white font-bold">1.000</span></div>
+                              <div id="sigma-bar-track"><div id="sigma-bar-fill"></div></div>
+                              <div class="sigma-label-row"><span>0 (沈黙)</span><span>1 (臨界)</span><span>2+ (過興奮)</span></div>
+                              <div class="flex justify-between mt-1.5" id="row-homeo"><span>Homeo error</span><span id="val-homeo" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="予測誤差の抑圧蓄積量" id="row-tension"><span>Internal tension</span><span id="val-tension" class="text-white">0.000</span></div>
+                              <div class="flex justify-between" id="row-touch"><span>Touch count</span><span id="val-touch" class="text-white">0</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Active pointer contacts this frame (PR4)" id="row-touch-active"><span>Active touches</span><span id="val-touch-active" class="text-white">0</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Mean raw touch surface activation (PR4)" id="row-raw-touch"><span>Raw touch</span><span id="val-raw-touch" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Mean touch onset — unexpected contact (PR4)" id="row-touch-onset"><span>Touch onset</span><span id="val-touch-onset" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Mean touch offset — vanished contact (PR4)" id="row-touch-offset"><span>Touch offset</span><span id="val-touch-offset" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Mean touch novelty — perceptual mismatch magnitude (PR4)" id="row-touch-novelty"><span>Touch novelty</span><span id="val-touch-novelty" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Mean microphone amplitude field (Phase B1)" id="row-sound-level"><span>Sound level</span><span id="val-sound-level" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Frame-to-frame sound level change (Phase B1)" id="row-sound-delta"><span>Sound delta</span><span id="val-sound-delta" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Coarse low-band energy summary (Phase B1)" id="row-sound-low"><span>Sound low</span><span id="val-sound-low" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Coarse mid-band energy summary (Phase B1)" id="row-sound-mid"><span>Sound mid</span><span id="val-sound-mid" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Coarse high-band energy summary (Phase B1)" id="row-sound-high"><span>Sound high</span><span id="val-sound-high" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Observed sound novelty from onset / band shift (Phase B1)" id="row-sound-novelty"><span>Sound novelty</span><span id="val-sound-novelty" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Observed persistence during sustained sound (Phase B1)" id="row-sound-persistence"><span>Sound persistence</span><span id="val-sound-persistence" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Whether the sound field is currently above the quiet threshold (Phase B1)" id="row-sound-active"><span>Sound active</span><span id="val-sound-active" class="text-white">inactive</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Mean camera brightness (Phase B2)" id="row-light-level"><span>Light level</span><span id="val-light-level" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Frame-to-frame brightness change (Phase B2)" id="row-light-delta"><span>Light delta</span><span id="val-light-delta" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Observed light novelty from brightness onset / shift (Phase B2)" id="row-light-novelty"><span>Light novelty</span><span id="val-light-novelty" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Observed persistence during sustained brightness (Phase B2)" id="row-light-persistence"><span>Light persistence</span><span id="val-light-persistence" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Whether light field is above the low-input threshold (Phase B2)" id="row-light-active"><span>Light active</span><span id="val-light-active" class="text-white">inactive</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Normalised acceleration magnitude from device motion (Phase B2)" id="row-motion-level"><span>Motion level</span><span id="val-motion-level" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Frame-to-frame acceleration change (Phase B2)" id="row-motion-delta"><span>Motion delta</span><span id="val-motion-delta" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Observed novelty from sudden device movement (Phase B2)" id="row-motion-novelty"><span>Motion novelty</span><span id="val-motion-novelty" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Observed persistence during sustained motion (Phase B2)" id="row-motion-persistence"><span>Motion persistence</span><span id="val-motion-persistence" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Whether motion field is above the low-input threshold (Phase B2)" id="row-motion-active"><span>Motion active</span><span id="val-motion-active" class="text-white">inactive</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Current position in 24h circadian cycle [0,1] (Phase B2)" id="row-time-phase"><span>Time phase</span><span id="val-time-phase" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Quiet circadian baseline level (Phase B2)" id="row-time-level"><span>Time level</span><span id="val-time-level" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Observed persistence of time field (Phase B2)" id="row-time-persistence"><span>Time persistence</span><span id="val-time-persistence" class="text-white">0.0000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Whether time field is active (always true) (Phase B2)" id="row-time-active"><span>Time active</span><span id="val-time-active" class="text-white">active</span></div>
+                              <div class="flex justify-between" id="row-baseline"><span>Baseline drift</span><span id="val-baseline" class="text-white">0.000</span></div>
+                              <div class="flex justify-between" id="row-residue"><span>Activity residue</span><span id="val-residue" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Mean absolute local prediction error (PR3)" id="row-local-pred-error"><span>Local pred error</span><span id="val-local-pred-error" class="text-white">0.000</span></div>
+                          </div>
+                      </div>
+                  </div>
+                  <!-- PR7: Touch Pattern -->
+                  <div>
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-touch-pattern', 'icon-touch-pattern')">
+                          <span class="tracking-wider">TOUCH PATTERN</span>
+                          <svg id="icon-touch-pattern" class="w-3 h-3 transform transition-transform collapsed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-touch-pattern" class="accordion-grid collapsed">
+                          <div class="accordion-inner space-y-0.5 pt-0.5 pb-1">
+                              <div class="flex justify-between has-tooltip" data-tooltip="Consecutive frames with active contact (PR7)" id="row-touch-duration"><span>Duration (frames)</span><span id="val-touch-duration" class="text-white">0</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="EMA of per-frame centroid displacement (PR7)" id="row-touch-velocity"><span>Velocity</span><span id="val-touch-velocity" class="text-white">0.00000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Count of short-gap re-contacts (PR7)" id="row-touch-repeat"><span>Repeat count</span><span id="val-touch-repeat" class="text-white">0</span></div>
+                              <div class="flex justify-between has-tooltip font-bold" data-tooltip="Dominant touch tendency this frame (PR7)" id="row-touch-dominant"><span>Dominant</span><span id="val-touch-dominant" class="text-white">&#x2014;</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Tap score — brief contact, low movement (PR7)" id="row-score-tap"><span>Score: tap</span><span id="val-score-tap" class="text-yellow-300">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Repeat score — multiple short-gap contacts (PR7)" id="row-score-repeat"><span>Score: repeat</span><span id="val-score-repeat" class="text-red-300">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Hold score — long contact, low movement (PR7)" id="row-score-hold"><span>Score: hold</span><span id="val-score-hold" class="text-purple-300">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Stroke score — contact with significant movement (PR7)" id="row-score-stroke"><span>Score: stroke</span><span id="val-score-stroke" class="text-emerald-300">0.000</span></div>
+                          </div>
+                      </div>
+                  </div>
+                  <div>
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-prior-rewrite', 'icon-prior-rewrite')">
+                          <span class="tracking-wider">PRIOR REWRITE</span>
+                          <svg id="icon-prior-rewrite" class="w-3 h-3 transform transition-transform collapsed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-prior-rewrite" class="accordion-grid collapsed">
+                          <div class="accordion-inner space-y-0.5 pt-0.5 pb-1">
+                              <div class="flex justify-between has-tooltip font-bold" data-tooltip="Current structured rewrite tendency inferred from touch pattern / proto seed pressure (PR8-A)" id="row-rewrite-tendency"><span>Tendency</span><span id="val-rewrite-tendency" class="text-white">none</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Mean / max rewrite pressure across nodes (PR8-A)" id="row-rewrite-pressure"><span>Pressure avg/max</span><span id="val-rewrite-pressure" class="text-white">0.000 / 0.000</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Global safety load that suppresses further rewrites when high (PR8-A)" id="row-rewrite-load"><span>Global load</span><span id="val-rewrite-load" class="text-white">0.000</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Mean node-local prior channel biases: novelty / recurrence / persistence / directionality (PR8-A)" id="row-prior-bias"><span>Prior bias</span><span id="val-prior-bias" class="text-white">n=0.00 r=0.00 p=0.00 d=0.00</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Most recent bounded prior rewrite event (PR8-A)" id="row-last-rewrite"><span>Last rewrite</span><span id="val-last-rewrite" class="text-white">&#x2014;</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Main noise path source for Phase D margin injection" id="row-noise-path"><span>Noise path</span><span id="val-noise-path" class="text-white">uninitialized</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Injected noise magnitude from the current hardware-random path" id="row-noise-mag"><span>Noise magnitude</span><span id="val-noise-mag" class="text-white">0.0000</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Dormant-capable nodes and currently awakened subset" id="row-dormant-nodes"><span>Dormant nodes</span><span id="val-dormant-nodes" class="text-white">0 (0 awake)</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Total dormant wake events observed in this run" id="row-dormant-wakes"><span>Dormant wakes</span><span id="val-dormant-wakes" class="text-white">0</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Mean / max wake pressure over dormant-capable nodes" id="row-dormant-pressure"><span>Wake pressure avg/max</span><span id="val-dormant-pressure" class="text-white">0.000 / 0.000</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Recent dormant wake events for observation only" id="row-dormant-events"><span>Recent dormant wakes</span><span id="val-dormant-events" class="text-white">&#x2014;</span></div>
+                               <div class="flex justify-between has-tooltip font-bold" data-tooltip="Current conservative activity mode (PR9-A)" id="row-mode-state"><span>Mode</span><span id="val-mode-state" class="text-white">wake</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Drive toward externally open wake dynamics (PR9-A)" id="row-wake-drive"><span>Wake drive</span><span id="val-wake-drive" class="text-white">0.000</span></div>
+                               <div class="flex justify-between has-tooltip" data-tooltip="Pressure toward quiet low-sensitivity sleep dynamics (PR9-A)" id="row-sleep-pressure"><span>Sleep pressure</span><span id="val-sleep-pressure" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Pressure toward low-input internal replay dynamics (PR9-A)" id="row-dream-pressure"><span>Dream pressure</span><span id="val-dream-pressure" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Frames since the last mode transition (PR9-A)" id="row-last-mode-change"><span>Last mode change</span><span id="val-last-mode-change" class="text-white">0 frames</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Whether weak dream-like replay is currently active (PR9-A)" id="row-dream-replay"><span>Dream replay</span><span id="val-dream-replay" class="text-white">inactive</span></div>
+                          </div>
+                      </div>
+                  </div>
+                  <div>
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-organism-state', 'icon-organism-state')">
+                          <span class="tracking-wider">ORGANISM / ACTION</span>
+                          <svg id="icon-organism-state" class="w-3 h-3 transform transition-transform collapsed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-organism-state" class="accordion-grid collapsed">
+                          <div class="accordion-inner space-y-0.5 pt-0.5 pb-1">
+                              <div class="flex justify-between has-tooltip" data-tooltip="Current activity reserve / surplus (PR11)" id="row-energy"><span>Energy</span><span id="val-energy" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="How internally settled/coherent the organism currently is (PR11)" id="row-stability"><span>Stability</span><span id="val-stability" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Accumulated overload from novelty, prediction error, and dense contact (PR11)" id="row-overload"><span>Overload</span><span id="val-overload" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Drive toward settling / resting (PR11)" id="row-rest-drive"><span>Rest drive</span><span id="val-rest-drive" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Drive toward orienting to outside contact (PR11)" id="row-orienting-drive"><span>Orienting drive</span><span id="val-orienting-drive" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip font-bold" data-tooltip="Current primitive action tendency (PR11)" id="row-action-state"><span>Action state</span><span id="val-action-state" class="text-white">idle</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Weak action output amplitude (PR11)" id="row-action-pulse"><span>Action pulse</span><span id="val-action-pulse" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Current action direction vector when orient/withdraw is directional (PR11)" id="row-action-direction"><span>Action direction</span><span id="val-action-direction" class="text-white">&#x2014;</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="Most recent touch direction cue from the surface (PR11)" id="row-last-touch-direction"><span>Touch direction</span><span id="val-last-touch-direction" class="text-white">&#x2014;</span></div>
+                          </div>
+                      </div>
+                  </div>
+                  <div>
+                      <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-arousal-awareness', 'icon-arousal-awareness')">
+                          <span class="tracking-wider">A2 AROUSAL / WINDOW</span>
+                          <svg id="icon-arousal-awareness" class="w-3 h-3 transform transition-transform collapsed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-arousal-awareness" class="accordion-grid collapsed">
+                          <div class="accordion-inner space-y-0.5 pt-0.5 pb-1">
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] Activity / activation height. Separate from the foreground availability window." id="row-bl-arousal-level"><span>Arousal level</span><span id="val-bl-arousal-level" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] Foreground availability window. High activity does not imply a wide window." id="row-bl-awareness-window"><span>Awareness window</span><span id="val-bl-awareness-window" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] How easily mismatch / novelty can pass into the foreground window." id="row-bl-salience-openness"><span>Salience openness</span><span id="val-bl-salience-openness" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] Current pressure for something to move into foreground." id="row-bl-foreground-pressure"><span>Foreground pressure</span><span id="val-bl-foreground-pressure" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] Quiet-depth / rest-side settling capacity." id="row-bl-rest-depth"><span>Rest depth</span><span id="val-bl-rest-depth" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] Reactive sharpness when arousal outruns organization." id="row-bl-hyperreactivity"><span>Hyperreactivity</span><span id="val-bl-hyperreactivity" class="text-white">0.000</span></div>
+                              <div class="flex justify-between has-tooltip" data-tooltip="[DERIVED] Available room for re-settling after perturbation." id="row-bl-settling-window"><span>Settling window</span><span id="val-bl-settling-window" class="text-white">0.000</span></div>
+                          </div>
+                      </div>
+                  </div>
+                   <!-- 前提条件 -->
+                   <div>
+                       <div class="flex justify-between items-center cursor-pointer text-cyan-400 font-bold mb-1 border-b border-white/10 pb-0.5 hover:text-cyan-300" onclick="toggleAccordion('sec-prereq', 'icon-prereq')">
+                           <span class="tracking-wider">PREREQUISITES</span>
+                          <svg id="icon-prereq" class="w-3 h-3 transform transition-transform collapsed-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                      <div id="sec-prereq" class="accordion-grid collapsed">
+                          <div class="accordion-inner space-y-0.5 pt-0.5">
+                              <div class="flex justify-between" id="row-pre-a"><span>A: Ergodic orbit</span><span id="val-pre-a" class="text-white">–</span></div>
+                              <div class="flex justify-between" id="row-pre-b"><span>B: R/r ≈ φ</span><span id="val-pre-b" class="text-white">–</span></div>
+                              <div class="flex justify-between" id="row-pre-c"><span>C: Φ* proxy > 0.002</span><span id="val-pre-c" class="text-white">–</span></div>
+                              <div class="flex justify-between" id="row-pre-d"><span>D: Cluster > 5%</span><span id="val-pre-d" class="text-white">–</span></div>
+                              <div class="flex justify-between" id="row-pre-e"><span>E: White Engine</span><span id="val-pre-e" class="text-white">–</span></div>
+                              <div class="flex justify-between font-bold mt-1 text-cyan-300" id="row-total"><span>TOTAL</span><span id="val-total">0/5</span></div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+            </div>
+        </div>
+
+        <!-- 下部: コントロールパネル -->
+        <div id="control-panel" class="w-full max-w-md mx-auto glass-panel rounded-t-2xl rounded-b-none border-b-0 shadow-[0_-5px_30px_rgba(0,0,0,0.5)] pointer-events-auto flex flex-col pb-safe">
+          <div class="flex justify-between items-center px-5 py-2.5 cursor-pointer bg-white/5 hover:bg-white/10 transition-colors border-b border-white/5" onclick="toggleAccordion('control-body', 'icon-control')">
+              <span class="text-[10px] font-bold text-cyan-300 tracking-[0.2em] font-mono">CONTROL PANEL</span>
+              <svg id="icon-control" class="w-4 h-4 text-cyan-300 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </div>
+
+          <div id="control-body" class="accordion-grid">
+              <div class="accordion-inner p-4 pt-3 pb-2 max-h-[50vh] overflow-y-auto custom-scrollbar">
+                  <div class="flex gap-2 justify-between mb-3">
+                    <button id="preset-schumann" class="preset-btn" onclick="applyPreset('schumann')">🌍 シュマン</button>
+                    <button id="preset-golden"   class="preset-btn" onclick="applyPreset('golden')">φ 黄金比</button>
+                    <button id="preset-gamma"    class="preset-btn" onclick="applyPreset('gamma')">⚡ ガンマ</button>
+                  </div>
+                  <div class="mb-2">
+                    <div class="flex justify-between text-[11px] font-mono text-white/70 mb-1 px-1">
+                        <span>ω_t (トロイダル周波数)</span>
+                        <span id="slider-val-omega-t" class="font-bold text-white">8.33 Hz</span>
+                    </div>
+                    <input type="range" id="slider-omega-t" min="1.0" max="20.0" step="0.01" value="8.33">
+                  </div>
+                  <div class="mb-2">
+                    <div class="flex justify-between text-[11px] font-mono text-white/70 mb-1 px-1">
+                        <span>ω_p (ポロイダル周波数)</span>
+                        <span id="slider-val-omega-p" class="font-bold text-white">0.00 Hz</span>
+                    </div>
+                    <input type="range" id="slider-omega-p" min="0.0" max="5.0" step="0.01" value="0.0">
+                  </div>
+                  <div class="mb-4">
+                    <div class="flex justify-between text-[11px] font-mono text-white/70 mb-1 px-1">
+                        <span>r (断面半径)</span>
+                        <span id="slider-val-r" class="font-bold text-white">1.00</span>
+                    </div>
+                    <input type="range" id="slider-r" min="0.5" max="3.0" step="0.01" value="1.0">
+                  </div>
+                  <div class="flex gap-2 mb-3">
+                    <button class="action-btn flex-1 bg-red-500/10 active:scale-95 border border-red-500/20 rounded-xl font-mono text-red-300 tracking-wider transition-all" onclick="injectMassiveError()">
+                        <span>⚡ 刺激注入</span>
+                    </button>
+                    <button class="action-btn flex-1 bg-white/5 active:scale-95 border border-white/10 rounded-xl font-mono text-white/80 tracking-wider transition-all" onclick="resetTouchMemory()">
+                        <span>🗑 リセット</span>
+                    </button>
+                  </div>
+
+                  <!-- ── Experience Mode: Signal Runtime ── -->
+                  <div class="border-t border-white/10 pt-3 mb-3">
+                      <div class="flex justify-between items-center text-[10px] font-mono mb-2">
+                          <span class="text-cyan-300 font-bold tracking-wider">EXPERIENCE MODE</span>
+                      </div>
+                      <div class="flex gap-1 mb-2">
+                          <select id="experience-mode" class="bg-black/50 border border-white/10 rounded px-1 flex-1 text-white/80 outline-none text-[10px] font-mono" onchange="onExperienceModeChange(this.value)">
+                              <option value="internal_mock">internal_mock</option>
+                              <option value="signal_runtime">signal_runtime</option>
+                          </select>
+                      </div>
+                      <div id="signal-input-area" style="display:none;">
+                          <textarea id="signal-stimulus-input" rows="2"
+                              placeholder="刺激テキストを入力してください..."
+                              class="w-full bg-black/50 border border-white/10 rounded px-2 py-1.5 text-white/80 outline-none text-[10px] font-mono resize-none mb-1"></textarea>
+                          <button class="w-full action-btn bg-cyan-500/10 active:scale-95 border border-cyan-500/20 rounded-xl text-[10px] font-mono text-cyan-300 tracking-wider transition-all"
+                              onclick="runSignalMode()">▶ RUN SIGNAL</button>
+                          <div id="signal-status" class="text-[8px] text-white/40 text-right mt-1 h-3">Ready</div>
+                      </div>
+                  </div>
+
+                  <div class="border-t border-white/10 pt-3">
+                      <div class="flex justify-between items-center text-[10px] font-mono mb-2">
+                          <span class="text-white/60">VISUAL LAYER (GLASS)</span>
+                          <button id="btn-visual-layer" class="visual-btn px-4 py-1.5 rounded-md bg-white/5 border border-white/10 hover:bg-white/10 transition-colors tracking-wider" onclick="toggleVisualLayer()">OFF</button>
+                      </div>
+
+                      <div class="flex justify-between items-center text-[10px] font-mono mb-2 mt-2">
+                          <span class="text-white/60">DEBUG LABELS (DEV)</span>
+                          <button id="btn-debug-labels" class="visual-btn px-4 py-1.5 rounded-md bg-white/5 border border-white/10 hover:bg-white/10 transition-colors tracking-wider" onclick="toggleDebugLabels()">OFF</button>
+                      </div>
+
+                      <!-- Phase 6: Camera view controls -->
+                      <div class="border-t border-white/10 pt-3 mt-3">
+                          <span class="text-[9px] text-white/60 font-bold tracking-wider">CAMERA VIEWPOINTS</span>
+                          <div class="grid grid-cols-2 gap-1.5 mt-2">
+                              <button class="px-2 py-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[9px] text-white/80 font-mono" onclick="cameraResetView()">RESET</button>
+                              <button class="px-2 py-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[9px] text-white/80 font-mono" onclick="cameraFocusTorus()">FOCUS</button>
+                              <button class="px-2 py-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[9px] text-white/80 font-mono" onclick="cameraTopView()">TOP</button>
+                              <button class="px-2 py-1.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-[9px] text-white/80 font-mono" onclick="cameraSideView()">SIDE</button>
+                          </div>
+                      </div>
+
+                      <div class="flex flex-col gap-1.5 text-[10px] font-mono mt-3">
+                          <span class="text-white/60 has-tooltip" data-tooltip="Note: 本番運用時はバックエンドプロキシ経由を推奨します">GUIDE API CONFIG</span>
+                          <div class="flex gap-1">
+                              <select id="api-provider" class="bg-black/50 border border-white/10 rounded px-1 flex-1 text-white/80 outline-none">
+                                  <option value="none">NONE</option>
+                                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (推奨)</option>
+                                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                                  <option value="openai">OpenAI GPT-4o</option>
+                              </select>
+                              <input type="password" id="api-key" placeholder="API KEY" class="bg-black/50 border border-white/10 rounded px-2 w-[40%] text-white/80 outline-none">
+                              <button class="bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 rounded px-2 hover:bg-cyan-500/30 transition-colors" onclick="testAPIConnection()">TEST</button>
+                          </div>
+                          <div id="api-status" class="text-[8px] text-white/40 h-3 text-right pr-1">Not connected</div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+        </div>
+    </div>
+
+    <script type="module" src="./src/main.ts"></script>
+    <script type="module" src="./src/ui/debugPanels.js"></script>
+</body>
+</html>
