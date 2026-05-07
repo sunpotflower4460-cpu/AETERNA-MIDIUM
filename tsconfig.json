@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/bridge/**/*.ts",
+    "src/signal/**/*.ts",
+    "src/types/**/*.ts",
+    "src/domain/**/*.ts",
+    "src/pages/**/*.tsx",
+    "src/components/**/*.tsx",
+    "src/motherNew/**/*.tsx",
+    "src/motherNew/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts"]
+}
