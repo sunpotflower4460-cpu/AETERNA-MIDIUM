@@ -1,7 +1,7 @@
 /**
  * TorusLivingField.ts
  *
- * AETERNA-TORUS-FIRST (Living Field Edition) — Phase 1 main engine.
+ * AETERNA-TORUS-FIRST (Living Field Edition) — Phase 1 + Phase 2 main engine.
  *
  * Model concept (no life/consciousness/alive claims):
  *   - Toroidal boundary is the unconditional default.
@@ -14,7 +14,7 @@
  *   - Metrics are mathematical observables only.
  */
 
-import type { TorusCell, TorusFieldConfig } from './FieldTypes.ts';
+import type { TorusCell, TorusFieldConfig, FieldMetrics } from './FieldTypes.ts';
 import {
   applyEnergyUpdate,
   updateDerivedMetrics,
@@ -24,6 +24,7 @@ import {
   createSeededRandom,
   normalizeGlobalEnergy,
 } from './utils.ts';
+import { SelfOrganizationEngine } from './SelfOrganizationEngine.ts';
 
 const TWO_PI = Math.PI * 2;
 
@@ -41,6 +42,8 @@ function makeCell(energy: number, phaseReal: number, phaseImag: number): TorusCe
     inputRate: 0,
     stability: 1,
     collapseRisk: 0,
+    localCoherence: 0,
+    globalInfluence: 0,
   };
 }
 
@@ -54,6 +57,8 @@ function cloneCell(src: TorusCell): TorusCell {
     inputRate: src.inputRate,
     stability: src.stability,
     collapseRisk: src.collapseRisk,
+    localCoherence: src.localCoherence,
+    globalInfluence: src.globalInfluence,
   };
 }
 
@@ -71,10 +76,12 @@ function cloneCell(src: TorusCell): TorusCell {
 export class TorusLivingField {
   private grid: TorusCell[][];
   private readonly config: TorusFieldConfig;
+  private readonly selfOrganization: SelfOrganizationEngine;
 
   constructor(config: TorusFieldConfig) {
     this.config = config;
     this.grid = this.initializeToroidalGrid();
+    this.selfOrganization = new SelfOrganizationEngine(this, config);
   }
 
   // -------------------------------------------------------------------------
@@ -115,6 +122,7 @@ export class TorusLivingField {
    *   3. Commit new grid.
    *   4. Normalise global energy (soft conservation).
    *   5. Update derived metrics (stability, collapseRisk).
+   *   6. Run SelfOrganizationEngine (Phase 2: coherence, attractor strengthening).
    */
   step(): void {
     const { width, height, survivalThreshold } = this.config;
@@ -144,6 +152,9 @@ export class TorusLivingField {
 
     // 5. Derived metrics
     this.updateDerivedMetricsAll();
+
+    // 6. Phase 2 self-organisation
+    this.selfOrganization.organize();
   }
 
   // -------------------------------------------------------------------------
@@ -308,5 +319,14 @@ export class TorusLivingField {
   /** Return a copy of the field configuration. */
   getConfig(): Readonly<TorusFieldConfig> {
     return { ...this.config };
+  }
+
+  /**
+   * Compute and return aggregate FieldMetrics for the current grid state.
+   *
+   * All returned values are observational proxies (see FieldMetrics JSDoc).
+   */
+  getFieldMetrics(): FieldMetrics {
+    return this.selfOrganization.computeFieldMetrics();
   }
 }

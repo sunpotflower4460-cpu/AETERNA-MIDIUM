@@ -1,7 +1,7 @@
 /**
  * FieldTypes.ts
  *
- * AETERNA-TORUS-FIRST (Living Field Edition) — Phase 1
+ * AETERNA-TORUS-FIRST (Living Field Edition) — Phase 1 + Phase 2
  *
  * Type definitions for the TorusLivingField engine.
  * Energy is a first-class citizen: every cell carries its own
@@ -36,6 +36,10 @@ export interface Complex {
  * Derived (recomputed each step, never set directly):
  *   stability    — torus stability proxy [0 = near-collapse, 1 = stable]
  *   collapseRisk — cumulative collapse risk [0, 1]
+ *
+ * Phase 2 additions:
+ *   localCoherence  — consistency of circulation with neighbours [0, 1]
+ *   globalInfluence — contribution to the global torus field coherence [0, 1]
  */
 export interface TorusCell {
   phase: Complex;
@@ -48,6 +52,63 @@ export interface TorusCell {
 
   stability: number;
   collapseRisk: number;
+
+  // === Phase 2 ===
+  localCoherence: number;
+  globalInfluence: number;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Field-level observational metrics
+// ---------------------------------------------------------------------------
+
+/**
+ * Aggregate metrics derived from the whole TorusLivingField grid.
+ *
+ * GUARDRAILS: All values are observational proxies for field behaviour only.
+ * They do not imply life, consciousness, intention, or self-preservation.
+ * kind annotations indicate the derivation category.
+ */
+export interface FieldMetrics {
+  /**
+   * Total energy flow through the field per step.
+   * kind: 'Proxy'
+   */
+  energyThroughput: number;
+
+  /**
+   * Mean local coherence across all cells; indicates how consistently
+   * cells circulate with their neighbours (0 = incoherent, 1 = fully coherent).
+   * kind: 'Derived'
+   */
+  torusCoherence: number;
+
+  /**
+   * Overall sustainability of the torus structure; fraction of cells
+   * above the survival threshold weighted by their stability.
+   * kind: 'Derived'
+   */
+  globalStability: number;
+
+  /**
+   * Balance between dissipation and input across the field.
+   * 0 = dissipation-dominated, 1 = input-dominated, 0.5 = balanced.
+   * kind: 'Proxy'
+   */
+  dissipationBalance: number;
+
+  /**
+   * Mean collapse pressure across all cells.
+   * kind: 'Proxy'
+   */
+  collapsePressureMap: number;
+
+  /**
+   * Count of cells that qualify as vortex candidates
+   * (energy > 0.45 and vorticity > 0.6).
+   * kind: 'Proxy'
+   */
+  vortexCandidateCount: number;
 }
 
 /**
